@@ -1,4 +1,5 @@
-from typing import Tuple, Union
+from time import sleep
+from typing import Set, Tuple, Union
 from dotenv import load_dotenv
 import os
 import tweepy
@@ -17,26 +18,85 @@ class PyTweeBlockError(Exception):
 
 def main() -> None:
     curr_user = generate_current_user()
-    liking_users = curr_user.get_liking_users(
-        "1478011189561114629", user_auth=True
+    print(
+        len(
+            generate_account_blocklist(
+                curr_user,
+                "@Lavi__Laio",
+            )
+        )
     )
-    print(liking_users.data)
-    print(type(liking_users.data[0]))
+
+def block_users(curr: CurrentUser, blocklist: Set[str]) -> None:
+    for id in blocklist:
+        curr.client.block(id)
 
 
-def block_related_to_tweet(client: tweepy.Client, tweet_link: str) -> None:
-    account, tweet_id = ""
+def generate_account_blocklist(curr: CurrentUser, account: str) -> Set[str]:
+    account = account.removeprefix("@")
+    account: tweepy.User = curr.client.get_user(
+        username=account, user_auth=True
+    ).data
+    users_following = collect_set_paginator(
+        curr.client.get_users_followers,
+        account.id,
+        user_auth=True,
+        max_results=1000,
+    )
+    users_to_not_block = collect_set_paginator(
+        curr.client.get_users_followers,
+        curr.id,
+        user_auth=True,
+        max_results=1000,
+    ) | collect_set_paginator(
+        curr.client.get_users_following,
+        curr.id,
+        user_auth=True,
+        max_results=1000,
+    )
+    block_list = users_following - users_to_not_block
+    return block_list
+
+
+def generate_tweet_blocklist(curr: CurrentUser, tweet_link: str) -> Set[str]:
+    account = ""
+    tweet_id = ""
     try:
-        account = re.findall(r"(?<=twitter\.com\/w+", tweet_link)[0]
+        account = re.findall(r"(?<=twitter\.com\/)\w+", tweet_link)[0]
         tweet_id = re.findall(r"(?<=status\/)\d+", tweet_link)[0]
     except IndexError:
         raise PyTweeBlockError(
             "Error extracting account name and tweet id from link"
         )
-    account: tweepy.User = client.get_user(account).data
-    liking_users = set(client.get_liking_users(tweet_id, user_auth=True))
-    users_following = set(client.get_users_followers(account.id))
-    users_to_not_block = set(client.get_users_followers())
+    account: tweepy.User = curr.client.get_user(
+        username=account, user_auth=True
+    ).data
+    liking_users = collect_set_paginator(
+        curr.client.get_liking_users, tweet_id, user_auth=True
+    )
+    users_following = collect_set_paginator(
+        curr.client.get_users_followers, account.id, user_auth=True
+    )
+    users_to_not_block = collect_set_paginator(
+        curr.client.get_users_followers, curr.id, user_auth=True
+    ) | collect_set_paginator(
+        curr.client.get_users_following, curr.id, user_auth=True
+    )
+    block_list = (liking_users | users_following) - users_to_not_block
+    return block_list
+
+
+def collect_set_paginator(method, *args, **kwargs) -> Set[str]:
+    to_return = set()
+    for response in tweepy.Paginator(method, *args, **kwargs):
+        to_return |= set(
+            map(
+                lambda user: user.id,
+                response.data,
+            )
+        )
+        print("Able to get Paginator once!")
+    return to_return
 
 
 def get_pin_input(url: str) -> str:
@@ -66,8 +126,9 @@ def generate_current_user() -> CurrentUser:
         consumer_secret=consumer_secret,
         access_token=user_key,
         access_token_secret=user_secret,
+        wait_on_rate_limit=True
     )
-    user_id = print(tweepy.API(auth).verify_credentials().id_str)
+    user_id = tweepy.API(auth).verify_credentials().id_str
     print("Login successful!")
     return CurrentUser(client, user_id)
 
