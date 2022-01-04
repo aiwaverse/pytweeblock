@@ -27,6 +27,7 @@ def main() -> None:
         )
     )
 
+
 def block_users(curr: CurrentUser, blocklist: Set[str]) -> None:
     for id in blocklist:
         curr.client.block(id)
@@ -72,15 +73,27 @@ def generate_tweet_blocklist(curr: CurrentUser, tweet_link: str) -> Set[str]:
         username=account, user_auth=True
     ).data
     liking_users = collect_set_paginator(
-        curr.client.get_liking_users, tweet_id, user_auth=True
+        curr.client.get_liking_users,
+        tweet_id,
+        user_auth=True,
+        max_results=1000,
     )
     users_following = collect_set_paginator(
-        curr.client.get_users_followers, account.id, user_auth=True
+        curr.client.get_users_followers,
+        account.id,
+        user_auth=True,
+        max_results=1000,
     )
     users_to_not_block = collect_set_paginator(
-        curr.client.get_users_followers, curr.id, user_auth=True
+        curr.client.get_users_followers,
+        curr.id,
+        user_auth=True,
+        max_results=1000,
     ) | collect_set_paginator(
-        curr.client.get_users_following, curr.id, user_auth=True
+        curr.client.get_users_following,
+        curr.id,
+        user_auth=True,
+        max_results=1000,
     )
     block_list = (liking_users | users_following) - users_to_not_block
     return block_list
@@ -126,7 +139,7 @@ def generate_current_user() -> CurrentUser:
         consumer_secret=consumer_secret,
         access_token=user_key,
         access_token_secret=user_secret,
-        wait_on_rate_limit=True
+        wait_on_rate_limit=True,
     )
     user_id = tweepy.API(auth).verify_credentials().id_str
     print("Login successful!")
