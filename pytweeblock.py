@@ -22,11 +22,28 @@ class PyTweeBlockError(Exception):
 
 def main() -> None:
     curr_user = generate_current_user()
-    blocklist = generate_tweet_blocklist(
-        curr_user,
-        "https://twitter.com/protecttwiceot9/status/1477302100094685190",
-    )
-    block_users(curr_user, blocklist)
+    keep_going = True
+    while keep_going:
+        keep_going = main_menu(curr_user)
+
+
+def main_menu(curr: CurrentUser) -> bool:
+    print("Please enter with the @ you want to block, or a tweet link.")
+    user_input = input().strip()
+    if re.match(r"https:\/\/twitter.com\/\w+\/status\/\w+", user_input):
+        blocklist = generate_tweet_blocklist(curr, user_input)
+        block_users(curr, blocklist)
+    elif re.match(r"(@\w+)|(\w+)", user_input):
+        blocklist = generate_account_blocklist(curr, user_input)
+        block_users(curr, blocklist)
+    answer = ""
+    while answer not in ("y", "n"):
+        answer = (
+            input("Do you want to mass block another account? (y\\n)")
+            .strip()
+            .lower()
+        )
+    return True if answer == "y" else False
 
 
 def block_users(curr: CurrentUser, blocklist: Set[str]) -> None:
@@ -158,7 +175,7 @@ def generate_current_user() -> CurrentUser:
         access_token=user_key,
         access_token_secret=user_secret,
         wait_on_rate_limit=True,
-        bearer_token=bearer_token
+        bearer_token=bearer_token,
     )
     api = tweepy.API(auth)
     user_id = api.verify_credentials().id_str
