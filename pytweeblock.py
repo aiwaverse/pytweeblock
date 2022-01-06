@@ -31,10 +31,15 @@ def main() -> None:
 
 def block_users(curr: CurrentUser, blocklist: Set[str]) -> None:
     curr.client.wait_on_rate_limit = False
+    use_api_2 = True
     for id in tqdm(blocklist):
-        try:
-            curr.client.block(id)
-        except tweepy.errors.TooManyRequests:
+        if use_api_2:
+            try:
+                curr.client.block(id)
+            except tweepy.errors.TooManyRequests:
+                curr.api.create_block(user_id=id)
+                use_api_2 = False
+        else:
             curr.api.create_block(user_id=id)
 
 
@@ -113,7 +118,6 @@ def collect_set(method, *args, **kwargs) -> Set[str]:
 
 def collect_set_paginator(method, *args, **kwargs) -> Set[str]:
     to_return = set()
-    print(f"collect_set_paginator called with {method.__name__}")
     for response in tweepy.Paginator(method, *args, **kwargs):
         to_return |= set(
             map(
